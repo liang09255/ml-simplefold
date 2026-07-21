@@ -20,8 +20,15 @@ from torch.nn.utils import clip_grad_norm_
 
 import lightning
 import lightning.pytorch as pl
-from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
-from fairscale.nn.wrap import enable_wrap, wrap
+try:
+    from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
+    from fairscale.nn.wrap import enable_wrap, wrap
+    _fairscale_available = True
+except ImportError:
+    FSDP = None
+    enable_wrap = None
+    wrap = None
+    _fairscale_available = False
 
 from utils.esm_utils import _af2_to_esm, esm_registry
 from boltz_data_pipeline.types import Record, Structure
@@ -631,8 +638,12 @@ class SimpleFold(pl.LightningModule):
         self.processor = self.hparams.processor(device=self.device)
 
         if self.use_esm:
-            if stage == "fit" and not isinstance(
-                self.trainer.strategy, lightning.pytorch.strategies.fsdp.FSDPStrategy
+            if (
+                _fairscale_available
+                and stage == "fit"
+                and not isinstance(
+                    self.trainer.strategy, lightning.pytorch.strategies.fsdp.FSDPStrategy
+                )
             ):
                 # initialize the model with FSDP wrapper
                 fsdp_params = dict(
@@ -669,7 +680,7 @@ class SimpleFold(pl.LightningModule):
                 self.af2_to_esm,
             )
             y = batch["coords"]
-            t = torch.zeros((y.shape[0])).cuda()
+            t = torch.zeros((y.shape[0])).to(self.device)
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         optimizer = self.optimizers()

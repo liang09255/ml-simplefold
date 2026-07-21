@@ -18,14 +18,102 @@ try:
 except:
     pass
 
-load_fn = torch.hub.load
+# Try torch.hub first, fall back to transformers if that fails
+def _load_esm_hub(model_name: str):
+    """Load ESM model, falling back to transformers if torch.hub fails."""
+    try:
+        return torch.hub.load(
+            "facebookresearch/esm:main", model_name, trust_repo=True
+        )
+    except Exception:
+        pass
+
+    # Fallback: load via HuggingFace transformers
+    try:
+        from transformers import EsmModel, EsmTokenizer
+
+        # Map ESM hub model names to HuggingFace IDs
+        hf_map = {
+            "esm2_t6_8M_UR50D": "facebook/esm2_t6_8M_UR50D",
+            "esm2_t12_35M_UR50D": "facebook/esm2_t12_35M_UR50D",
+            "esm2_t30_150M_UR50D": "facebook/esm2_t30_150M_UR50D",
+            "esm2_t33_650M_UR50D": "facebook/esm2_t33_650M_UR50D",
+            "esm2_t36_3B_UR50D": "facebook/esm2_t36_3B_UR50D",
+            "esm2_t48_15B_UR50D": "facebook/esm2_t48_15B_UR50D",
+        }
+        hf_id = hf_map.get(model_name)
+        if hf_id is None:
+            raise ValueError(f"Unknown ESM model: {model_name}")
+
+        hf_model = EsmModel.from_pretrained(hf_id)
+        hf_tokenizer = EsmTokenizer.from_pretrained(hf_id)
+
+        # Create wrapper to match ESM hub model API
+        class ESMHubModelWrapper:
+            """Wraps transformers EsmModel to expose hub-style call interface."""
+            def __init__(self, model):
+                self._model = model
+                self.num_layers = model.config.num_hidden_layers
+
+            def __call__(self, esmaa, repr_layers=None, need_head_weights=False):
+                with torch.no_grad():
+                    outputs = self._model(
+                        input_ids=esmaa,
+                        output_hidden_states=True,
+                        return_dict=True,
+                    )
+                    hidden = outputs.hidden_states
+                    reps = {}
+                    if repr_layers is not None:
+                        for i in repr_layers:
+                            # hidden_states[0] = embedding, [1] = layer 0, [2] = layer 1, ...
+                            reps[i] = hidden[i]
+                    return {"representations": reps}
+
+            def to(self, device):
+                self._model = self._model.to(device)
+                return self
+
+            def eval(self):
+                self._model = self._model.eval()
+                return self
+
+            def __getattr__(self, name):
+                return getattr(self._model, name)
+
+        from types import SimpleNamespace
+        alphabet = SimpleNamespace(
+            cls_idx=hf_tokenizer.cls_token_id,
+            eos_idx=hf_tokenizer.eos_token_id,
+            padding_idx=hf_tokenizer.pad_token_id,
+            vocab=hf_tokenizer.get_vocab(),
+        )
+        alphabet.get_idx = lambda token: alphabet.vocab.get(token, alphabet.padding_idx)
+
+        return ESMHubModelWrapper(hf_model), alphabet
+    except ImportError:
+        raise ImportError(
+            "Could not load ESM model via torch.hub or transformers. "
+            "Install with: pip install transformers"
+        )
+    except ImportError:
+        raise ImportError(
+            "Could not load ESM model via torch.hub (rate limited) or transformers (not installed). "
+            "Install transformers: pip install transformers"
+        )
+
+
+def _make_loader(model_name):
+    return lambda: _load_esm_hub(model_name)
+
+
 esm_registry = {
-    "esm2_8M": partial(load_fn, "facebookresearch/esm:main", "esm2_t6_8M_UR50D"),
-    "esm2_35M": partial(load_fn, "facebookresearch/esm:main", "esm2_t12_35M_UR50D"),
-    "esm2_150M": partial(load_fn, "facebookresearch/esm:main", "esm2_t30_150M_UR50D"),
-    "esm2_650M": partial(load_fn, "facebookresearch/esm:main", "esm2_t33_650M_UR50D"),
-    "esm2_3B": partial(load_fn, "facebookresearch/esm:main", "esm2_t36_3B_UR50D"),
-    "esm2_15B": partial(load_fn, "facebookresearch/esm:main", "esm2_t48_15B_UR50D"),
+    "esm2_8M": _make_loader("esm2_t6_8M_UR50D"),
+    "esm2_35M": _make_loader("esm2_t12_35M_UR50D"),
+    "esm2_150M": _make_loader("esm2_t30_150M_UR50D"),
+    "esm2_650M": _make_loader("esm2_t33_650M_UR50D"),
+    "esm2_3B": _make_loader("esm2_t36_3B_UR50D"),
+    "esm2_15B": _make_loader("esm2_t48_15B_UR50D"),
 }
 
 

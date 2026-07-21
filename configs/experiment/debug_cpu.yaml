@@ -1,0 +1,49 @@
+# @package _global__
+
+# CPU test experiment — trains for 5 steps on our 7 test structures
+
+defaults:
+  - override /data: my_test
+  - override /model: simplefold
+  - override /model/architecture: foldingdit_100M
+  - override /model/sampler: euler_maruyama
+  - override /model/processor: protein_processor
+  - override /callbacks: default
+  - override /trainer: default
+  - override /logger: tensorboard
+
+seed: 42
+
+trainer:
+  accelerator: cpu
+  devices: 1
+  max_steps: 5
+  val_check_interval: 5
+  precision: 32-true
+  log_every_n_steps: 1
+  num_sanity_val_steps: 0
+
+data:
+  batch_size: 1
+  num_workers: 0
+
+model:
+  _target_: model.simplefold.SimpleFold
+  esm_model: "esm2_8M"
+  ema_decay: 0.999
+  clip_grad_norm_val: 2.0
+
+  scheduler:
+    _target_: utils.lr_scheduler.LinearWarmup
+    _partial_: true
+    min_lr: 1e-6
+    max_lr: 1e-4
+    warmup_steps: 2
+
+  architecture:
+    esm_model: ${model.esm_model}
+
+  processor:
+    scale: 16.0
+    ref_scale: 5.0
+    multiplicity: 1

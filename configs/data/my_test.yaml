@@ -1,0 +1,34 @@
+_target_: datasets.train_datamodule.SimpleFoldTrainingDataModule
+
+datasets:
+  - _target_: utils.datamodule_utils.DatasetConfig
+    data_name: my_test
+    tokenized_dir: /root/code/ml-simplefold/data/tokenized
+    target_dir: /root/code/ml-simplefold/data/processed_targets
+    manifest_path: /root/code/ml-simplefold/data/tokenized/manifest.json
+    cropper:
+      _target_: boltz_data_pipeline.crop.boltz.BoltzCropper
+      min_neighborhood: 0
+      max_neighborhood: 40
+
+tokenizer:
+  _target_: boltz_data_pipeline.tokenize.boltz_protein.BoltzTokenizer
+
+featurizer:
+  _target_: boltz_data_pipeline.feature.featurizer.BoltzFeaturizer
+
+symmetries: /root/code/ml-simplefold/data/symmetry.pkl
+max_tokens: 256
+max_atoms: 2304
+pad_to_max_tokens: True
+pad_to_max_atoms: True
+batch_size: 1
+num_workers: 0
+pin_memory: False
+return_train_symmetries: False
+min_dist: 2.0
+max_dist: 22.0
+num_bins: 64
+atoms_per_window_queries: 32
+rotation_augment_ref_pos: False
+rotation_augment_coords: False

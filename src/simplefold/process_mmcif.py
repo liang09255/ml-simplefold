@@ -123,7 +123,7 @@ def finalize(out_dir: Path) -> None:
         json.dump(records, f)
 
 
-def parse(data: PDB, resource: Resource, clusters: dict) -> Target:
+def parse(data: PDB, resource: Resource, clusters: dict, use_assembly: bool = False) -> Target:
     """Process a structure.
 
     Parameters
@@ -132,6 +132,10 @@ def parse(data: PDB, resource: Resource, clusters: dict) -> Target:
         The raw input data.
     resource: Resource
         The shared resource.
+    clusters: dict
+        The clusters.
+    use_assembly: bool
+        Whether to use assembly 1.
 
     Returns
     -------
@@ -143,7 +147,7 @@ def parse(data: PDB, resource: Resource, clusters: dict) -> Target:
     pdb_id = data.id.lower()
 
     # Parse structure
-    parsed = parse_mmcif(data.path, resource)
+    parsed = parse_mmcif(data.path, resource, use_assembly=use_assembly)
     structure = parsed.data
     structure_info = parsed.info
 
@@ -179,6 +183,7 @@ def process_structure(
     out_dir: Path,
     filters: list[StaticFilter],
     clusters: dict,
+    use_assembly: bool = False,
 ) -> None:
     """Process a target.
 
@@ -201,7 +206,7 @@ def process_structure(
 
     try:
         # Parse the target
-        target: Target = parse(data, resource, clusters)
+        target: Target = parse(data, resource, clusters, use_assembly=use_assembly)
         structure = target.structure
 
         # Apply the filters
@@ -280,6 +285,7 @@ def process(args) -> None:
             out_dir=args.out_dir,
             clusters={},
             filters=filters,
+            use_assembly=args.use_assembly,
         )
         # Run processing in parallel
         p_umap(fn, data, num_cpus=num_processes)
@@ -291,6 +297,7 @@ def process(args) -> None:
                 out_dir=args.out_dir,
                 clusters={},
                 filters=filters,
+                use_assembly=args.use_assembly,
             )
 
     # Finalize
