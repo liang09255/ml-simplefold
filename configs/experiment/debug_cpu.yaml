@@ -1,49 +1,87 @@
 # @package _global__
-
-# CPU test experiment — trains for 5 steps on our 7 test structures
+#
+# ============================================================
+# debug_cpu.yaml  — CPU 调试实验配置
+# ============================================================
+# 用途：在 CPU 上快速验证训练管线是否跑通
+# 数据：7 个测试结构（1CRN, 1UBQ, 1ALY, 2PTH, 1L2Y, 1ENH, 1VII）
+# 模型：FoldingDiT-100M + ESM2-8M
+# 步数：5 步（约 30 秒跑完）
+#
+# 用法：
+#   python src/simplefold/train.py experiment=debug_cpu
+#   python src/simplefold/train.py experiment=debug_cpu trainer.max_steps=50
+# ============================================================
 
 defaults:
-  - override /data: my_test
-  - override /model: simplefold
-  - override /model/architecture: foldingdit_100M
-  - override /model/sampler: euler_maruyama
-  - override /model/processor: protein_processor
-  - override /callbacks: default
-  - override /trainer: default
-  - override /logger: tensorboard
+  - override /data: my_test                    # 使用我们建的 7 结构测试数据集
+  - override /model: simplefold                # SimpleFold 主模型
+  - override /model/architecture: foldingdit_100M  # DiT 架构（768 hidden, 8 层）
+  - override /model/sampler: euler_maruyama    # 采样器（用于生成，训练不直接使用）
+  - override /model/processor: protein_processor  # 数据处理器（含 ESM 特征提取）
+  - override /callbacks: default               # 回调（checkpoint + 模型摘要）
+  - override /trainer: default                 # 训练器
+  - override /logger: tensorboard              # 日志（TensorBoard）
 
+# 随机种子 — 保证可复现
 seed: 42
 
 trainer:
-  accelerator: cpu
-  devices: 1
-  max_steps: 5
+  # ─── 设备 ───
+  accelerator: cpu          # 使用 CPU（有 GPU 时改为 gpu）
+  devices: 1                # 设备数量
+
+  # ─── 训练步数 ───
+  # 官方 Full-Scale 训练：max_steps: 300000
+  # CPU 测试：建议 5~50 步验证管线
+  max_steps: 100
+
+  # 验证间隔（每 N 步做一次验证）
   val_check_interval: 5
+
+  # ─── 精度 ───
+  # CPU: 32-true（单精度）
+  # GPU: bf16-mixed（混合精度，更快省显存）
   precision: 32-true
+
+  # 日志间隔
   log_every_n_steps: 1
+
+  # 跳过验证集 sanity check（节省时间）
   num_sanity_val_steps: 0
 
 data:
-  batch_size: 1
-  num_workers: 0
+  batch_size: 1             # 批次大小（CPU 上只能 1；GPU 上可调大）
+  num_workers: 0            # 数据加载线程（CPU 建议 0；GPU 建议 8~16）
 
 model:
   _target_: model.simplefold.SimpleFold
+
+  # ─── ESM 模型选择 ───
+  # 可选值: esm2_8M, esm2_35M, esm2_150M, esm2_650M, esm2_3B, esm2_15B
+  # 越大提供的序列特征越丰富，但显存占用也越大
+  # CPU 上只建议用 esm2_8M
   esm_model: "esm2_8M"
+
+  # EMA 指数移动平均衰减率 — 平滑模型权重，提高稳定性
   ema_decay: 0.999
+
+  # 梯度裁剪最大值（防梯度爆炸）；设为 null 可禁用
   clip_grad_norm_val: 2.0
 
+  # ─── 学习率调度 ───
   scheduler:
     _target_: utils.lr_scheduler.LinearWarmup
     _partial_: true
-    min_lr: 1e-6
-    max_lr: 1e-4
-    warmup_steps: 2
+    min_lr: 1e-6                    # 最小学习率
+    max_lr: 1e-4                    # 最大学习率（也引用 ${model.optimizer.lr}）
+    warmup_steps: 2                 # 热身步数（从 min_lr 线性增加到 max_lr）
 
   architecture:
-    esm_model: ${model.esm_model}
+    esm_model: ${model.esm_model}  # 保持与上层一致
 
+  # ─── 数据处理器参数 ───
   processor:
-    scale: 16.0
-    ref_scale: 5.0
-    multiplicity: 1
+    scale: 16.0       # 坐标缩放因子（归一化坐标到 [-scale, scale]）
+    ref_scale: 5.0    # 参考坐标缩放
+    multiplicity: 1   # 每个样本的副本数（= 梯度累积效果，没有 GPU 隐存时用）

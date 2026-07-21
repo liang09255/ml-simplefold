@@ -1,20 +1,28 @@
-# path to root directory
-# this requires PROJECT_ROOT environment variable to exist
-# you can replace it with "." if you want the root to be the current working directory
+# ============================================================
+# 路径配置
+# ============================================================
+# 所有路径均相对于 Hydra 启动目录（${hydra:runtime.cwd}）
+# 也可以在命令行中覆盖：
+#   python train.py paths.root_dir=/your/absolute/path/experiments/exp1
+# ============================================================
+
+# 项目根目录（默认当前工作目录）
 root_dir: "./"
 
+# 临时文件目录
 tmp_dir: ${paths.root_dir}tmp/
 
-# path to data directory
+# 数据目录
 data_dir: ${paths.root_dir}data/
 
-# path to logging directory
+# 日志目录
 log_dir: ${paths.root_dir}logs/
 
-# artifacts directory
+# 输出目录（checkpoint、TensorBoard、配置日志等）
 output_dir: ${paths.root_dir}artifacts/
 
+# 推理样本输出目录
 sample_dir: ${.output_dir}/samples/
 
-# path to working directory
+# Hydra 运行时当前工作目录
 work_dir: ${hydra:runtime.cwd}

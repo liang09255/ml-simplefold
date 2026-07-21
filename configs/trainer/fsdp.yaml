@@ -1,17 +1,28 @@
 _target_: lightning.pytorch.trainer.Trainer
-
 default_root_dir: ${paths.output_dir}
 
-# set True to to ensure deterministic results
-# makes training slower but gives more reproducibility than just setting seeds
+# 是否启用确定性运算
 deterministic: False
 
+# ─── 硬件加速器 ───
 accelerator: gpu
 devices: auto
+
+# ─── FSDP 分布式策略 ───
+# FSDP（Fully Sharded Data Parallel）将模型参数分片到多个 GPU 上
+# 适合训练大模型（如 1.6B/3B），比 DDP 更省显存
+# 注意：FSDP 需要在 train_fsdp.py 中额外设置 auto_wrap_policy
+# 这里只传 strategy = None，实际的 FSDPStrategy 在 train_fsdp.py 中创建
+strategy: null
+
 num_nodes: 1
-min_epochs: 1 # prevents early stopping
+min_epochs: 1
 max_steps: 100000
+
+# ─── 精度设置 ───
 precision: bf16-mixed
+
+# ─── 验证 & 检查点 ───
 val_check_interval: 5000
 check_val_every_n_epoch: null
 num_sanity_val_steps: 0

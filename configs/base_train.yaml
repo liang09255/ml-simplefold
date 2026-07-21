@@ -1,31 +1,39 @@
+# ============================================================
+# base_train.yaml — 基础训练配置（入口）
+# ============================================================
+# 所有训练命令的根配置。Hydra 使用这个文件作为起点，
+# 然后根据 defaults 列表中的顺序逐层覆盖。
+#
+# 启动方式:
+#   python src/simplefold/train.py experiment=train
+#   python src/simplefold/train.py experiment=debug_cpu
+# ============================================================
+
 # @package _global_
 
-# specify here default configuration
-# order of defaults determines the order in which configs override each other
 defaults:
-  - data: pdb
-  - model/architecture: foldingdit_100M
-  - model/sampler: euler_maruyama
-  - model/processor: default
-  - model: default
-  - callbacks: default
-  - logger: null # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
-  - trainer: default
-  - paths: default
-  - extras: default
-  - hydra: default
-  - _self_
+  - data: pdb                              # 数据集配置（默认 PDB；可换 pdb_sp, pdb_sp_afesm 等）
+  - model/architecture: foldingdit_100M    # DiT 模型架构（100M/360M/700M/1.1B/1.6B/3B）
+  - model/sampler: euler_maruyama          # 采样器（推理时用）
+  - model/processor: default               # 数据处理器
+  - model: default                         # SimpleFold 主模型（loss、优化器、调度器）
+  - callbacks: default                     # 回调（checkpoint + 模型摘要）
+  - logger: null                           # 日志（默认空；可用 tensorboard）
+  - trainer: default                       # 训练器（DDP 多卡训练）
+  - paths: default                         # 路径配置
+  - extras: default                        # 额外功能（忽略警告、打印配置等）
+  - hydra: default                         # Hydra 自身配置
+  - _self_                                  # 保持本文件的优先级
 
-  # experiment configs allow for version control of specific hyperparameters
-  # e.g. best hyperparameters for given model and datamodule
+  # 实验配置 — 覆盖以上所有默认值
+  # e.g. configs/experiment/train.yaml
   - experiment: null
 
-# set False to skip model training
+# 是否训练
 train: True
 
-# evaluate on test set, using best model weights achieved during training
-# lightning chooses best weights based on the metric specified in checkpoint callback
+# 是否在测试集上评估（训练完成后）
 test: False
 
-# seed for random number generators in pytorch, numpy and python.random
+# 随机种子（设为 null 则不固定）
 seed: null

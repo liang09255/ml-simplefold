@@ -1,39 +1,76 @@
+# ============================================================
+# SimpleFold 模型默认配置
+# ============================================================
+# 定义模型的损失函数、优化器、学习率调度器、路径、处理器等
+#
+# 被 base_train.yaml 通过 defaults 引用:
+#   - model: default   → 实际找到 simplefold.yaml
+# ============================================================
+
 _target_: model.simplefold.SimpleFold
+
+# ─── EMA ───
+# 指数移动平均：保存一份平滑的模型权重，推理时通常质量更好
 ema_decay: 0.999
+
+# ─── 梯度裁剪 ───
 clip_grad_norm_val: 2.0
+
+# ─── 刚性对齐 ───
+# 训练时是否对预测坐标做刚性对齐（去除了整体平移旋转的影响）
 use_rigid_align: True
+
+# ─── 平滑 lDDT 损失权重 ───
+# lDDT（局部距离差测试）衡量预测结构相对于真实结构的局部质量
+# 设为 0 可禁用平滑 lDDT 损失
 smooth_lddt_loss_weight: 1.0
+
+# lDDT 截断距离（超过此距离的原子对不计入 lDDT 分数）
 lddt_cutoff: 15.0
+
+# ─── ESM 模型 ───
+# 蛋白质语言模型，作为冻结的特征提取器
+# 可选：esm2_8M, esm2_35M, esm2_150M, esm2_650M, esm2_3B, esm2_15B
 esm_model: "esm2_3B"
+
+# 是否使用 lDDT 权重调度（微调阶段设为 True）
 lddt_weight_schedule: False
+
+# 推理样本输出目录
 sample_dir: ${paths.sample_dir}
 
+# ─── 架构引用 ───
 architecture:
   esm_model: ${model.esm_model}
 
-path: 
+# ─── 噪声路径（Flow Matching 中的线性插值路径） ───
+path:
   _target_: model.flow.LinearPath
 
+# ─── 损失函数 ───
 loss:
   _target_: torch.nn.MSELoss
-  reduction: 'none'
+  reduction: 'none'       # 不对 batch 取平均（后面自己做加权）
   reduce: False
 
+# ─── 优化器 ───
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
-  lr: 1e-4
-  weight_decay: 0.0
-  max_steps: ???
+  lr: 1e-4                # 学习率
+  weight_decay: 0.0       # 权重衰减
+  max_steps: ???           # 从 trainer.max_steps 获取（Hydra 多级引用）
 
+# ─── 学习率调度器 ───
 scheduler:
   _target_: utils.lr_scheduler.LinearWarmup
   _partial_: true
-  min_lr: 1e-6
-  max_lr: ${model.optimizer.lr}
-  warmup_steps: 10
+  min_lr: 1e-6            # 最小学习率
+  max_lr: ${model.optimizer.lr}   # 最大学习率（引用优化器的 lr）
+  warmup_steps: 10         # 预热步数
 
+# ─── 数据处理器 ───
 processor:
-  scale: 16.0
-  ref_scale: 5.0
-  multiplicity: 16
+  scale: 16.0             # 坐标缩放（归一化到 [-scale, scale]）
+  ref_scale: 5.0          # 参考坐标缩放
+  multiplicity: 16         # 每个样本的副本数（有效 batch = batch_size × multiplicity）

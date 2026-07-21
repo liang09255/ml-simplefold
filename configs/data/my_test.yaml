@@ -1,34 +1,82 @@
+# ============================================================
+# my_test.yaml — 测试数据配置（7 个 PDB 结构）
+# ============================================================
+# 用途：在 CPU 上快速验证训练管线
+# 内容：1CRN(crambin), 1UBQ(ubiquitin), 1ALY, 2PTH, 1L2Y, 1ENH, 1VII
+#
+# 引用方式（在 experiment YAML 中）:
+#   defaults:
+#     - override /data: my_test
+# ============================================================
+
+# 目标：SimpleFoldTrainingDataModule（Lightning DataModule）
 _target_: datasets.train_datamodule.SimpleFoldTrainingDataModule
 
 datasets:
   - _target_: utils.datamodule_utils.DatasetConfig
     data_name: my_test
+
+    # ─── 分词后数据路径 ───
+    # tokenized_dir 存放 tokens/*.pkl（训练时实际读取的文件）
     tokenized_dir: /root/code/ml-simplefold/data/tokenized
+
+    # ─── 处理后的结构数据路径 ───
+    # target_dir 存放 structures/*.npz（包含原子坐标等）
     target_dir: /root/code/ml-simplefold/data/processed_targets
+
+    # ─── 数据集清单文件 ───
+    # 包含所有记录（record）的列表
     manifest_path: /root/code/ml-simplefold/data/tokenized/manifest.json
+
+    # ─── 裁剪器（Cropper） ───
+    # 长序列需要随机裁剪到 max_tokens / max_atoms 以内才能训练
     cropper:
       _target_: boltz_data_pipeline.crop.boltz.BoltzCropper
-      min_neighborhood: 0
-      max_neighborhood: 40
+      min_neighborhood: 0    # 最小邻域原子数
+      max_neighborhood: 40   # 最大邻域原子数
 
+# ─── 分词器 ───
+# 把氨基酸序列转为内部 token 表示
 tokenizer:
   _target_: boltz_data_pipeline.tokenize.boltz_protein.BoltzTokenizer
 
+# ─── 特征提取器 ───
+# 从 token 数据中计算训练用的特征（距离直方图、pair 表示等）
 featurizer:
   _target_: boltz_data_pipeline.feature.featurizer.BoltzFeaturizer
 
+# ─── 对称性数据 ───
+# 蛋白复合物的对称性信息（多聚体、对称组装等）
+# 这里用一个空文件（{ }），表示没有对称性约束
 symmetries: /root/code/ml-simplefold/data/symmetry.pkl
-max_tokens: 256
-max_atoms: 2304
+
+# ─── 序列长度限制 ───
+max_tokens: 256    # 每个样本最多 256 个 token（= 残基）
+max_atoms: 2304    # 每个样本最多 2304 个原子
+
+# ─── 是否填充到固定长度 ───
+# True = 所有样本填充到 max_tokens/max_atoms（适合 GPU 批处理）
 pad_to_max_tokens: True
 pad_to_max_atoms: True
-batch_size: 1
-num_workers: 0
-pin_memory: False
+
+# ─── 数据加载 ───
+batch_size: 1       # 批次大小（多 GPU 时 = 总 GPU 数）
+num_workers: 0      # 数据加载线程数（CPU 用 0；GPU 推荐 8~16）
+pin_memory: False   # 是否固定内存（仅 GPU 时开启，加速 CPU→GPU 传输）
+
+# 训练时不返回对称性信息
 return_train_symmetries: False
-min_dist: 2.0
-max_dist: 22.0
-num_bins: 64
+
+# ─── 距离直方图参数 ───
+# 用于 lDDT 损失函数的距离 bin 划分
+min_dist: 2.0       # 距离下限（Å）
+max_dist: 22.0      # 距离上限（Å）
+num_bins: 64        # 距离直方图分箱数
+
+# 原子注意力窗口大小
 atoms_per_window_queries: 32
-rotation_augment_ref_pos: False
-rotation_augment_coords: False
+
+# ─── 数据增强 ───
+# 随机旋转坐标，增加数据多样性
+rotation_augment_ref_pos: False   # 参考坐标旋转
+rotation_augment_coords: False    # 原子坐标旋转（训练建议开启）

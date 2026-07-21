@@ -1,67 +1,94 @@
+# ============================================================
+# foldingdit_100M.yaml — DiT 模型架构（最小版本）
+# ============================================================
+# 参数量: DiT ≈ 60M + ESM ≈ 8M = 总共约 68M trainable
+# hidden_size: 768, depth: 8, heads: 12
+# 适合：调试、CPU 测试、单卡小规模训练
+# ============================================================
+
 _target_: model.torch.architecture.FoldingDiT
 
-hidden_size: 768
-num_heads: 12
-atom_num_heads: 4
-output_channels: 3
-use_atom_mask: False
-use_length_condition: True
-esm_dropout_prob: 0.0
-esm_model: esm2_3B
+# ─── 主干网络（Trunk）参数 ───
+# 这是 SimpleFold 的核心：DiT (Diffusion Transformer) 去噪网络
+hidden_size: 768        # 隐层维度（越大模型容量越大）
+num_heads: 12             # 注意力头数（需整除 hidden_size）
+atom_num_heads: 4         # 原子级别注意力的头数
+output_channels: 3        # 输出维度（X/Y/Z 坐标）
 
+# 是否使用原子掩码（忽略缺失的原子）
+use_atom_mask: False
+use_length_condition: True  # 是否使用序列长度作为条件
+
+# ESM dropout（正则化，0=不使用）
+esm_dropout_prob: 0.0
+esm_model: esm2_3B       # 对应的 ESM 模型（从 config 上层覆盖）
+
+# ─── 时间步嵌入 ───
+# 将扩散时间 t 编码为向量，注入到 DiTBlock 中
 time_embedder:
   _target_: model.torch.layers.TimestepEmbedder
   hidden_size: 768
 
+# ─── 氨基酸位置编码 ───
+# 残基在序列中的绝对位置编码
 aminoacid_pos_embedder:
   _target_: model.torch.pos_embed.AbsolutePositionEncoding
   in_dim: 1
   embed_dim: 768
   include_input: True
 
+# ─── 3D 坐标傅立叶编码 ───
+# 将原子坐标用 Fourier 特征映射到高频空间（NeRF 风格）
 pos_embedder:
   _target_: model.torch.pos_embed.FourierPositionEncoding
   in_dim: 3
   include_input: True
-  min_freq_log2: 0
-  max_freq_log2: 12
-  num_freqs: 128
-  log_sampling: True
+  min_freq_log2: 0         # 最低频率
+  max_freq_log2: 12        # 最高频率（2^12 = 4096）
+  num_freqs: 128            # 频率数量（越大编码越精细）
+  log_sampling: True        # 对数间隔采样
 
+# ─── 主干 Transformer ───
+# HomogenTrunk = 同一类型的 DiTBlock 堆叠指定 depth 次
 trunk:
   _target_: model.torch.blocks.HomogenTrunk
-  depth: 8
-  block: 
+  depth: 8                  # 8 层 DiTBlock（堆叠深度）
+
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 768
-    mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    mlp_ratio: 4.0          # FFN 中间维度 = 4 × hidden_size
+    use_swiglu: True         # 使用 SwiGLU 激活函数（比 ReLU/GeLU 效果好）
+
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True
       hidden_size: 768
       num_heads: 12
-      qk_norm: True
+      qk_norm: True          # Q/K 归一化（提高训练稳定性）
       pos_embedder:
         _target_: model.torch.pos_embed.AxialRotaryPositionEncoding
         in_dim: 4
         embed_dim: 768
         num_heads: 12
-        base: 100.0
+        base: 100.0           # RoPE 频率基数
 
+# ─── 原子编码器（Atom Encoder） ───
+# 将每个原子的特征编码成隐向量
 atom_hidden_size_enc: 256
-atom_n_queries_enc: 32
-atom_n_keys_enc: 128
+atom_n_queries_enc: 32     # 编码器注意力查询窗口大小
+atom_n_keys_enc: 128       # 编码器注意力键窗口大小
+
 atom_encoder_transformer:
   _target_: model.torch.blocks.HomogenTrunk
   depth: 1
-  block: 
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 256
     mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    use_swiglu: True
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True
@@ -75,18 +102,21 @@ atom_encoder_transformer:
         num_heads: 4
         base: 100.0
 
+# ─── 原子解码器（Atom Decoder） ───
+# 从隐向量解码出最终的原子坐标
 atom_hidden_size_dec: 256
 atom_n_queries_dec: 32
 atom_n_keys_dec: 128
+
 atom_decoder_transformer:
   _target_: model.torch.blocks.HomogenTrunk
   depth: 1
-  block: 
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 256
     mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    use_swiglu: True
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True

@@ -1,3 +1,10 @@
+# ============================================================
+# foldingdit_360M.yaml — DiT 中等架构
+# hidden_size: 1024, depth: 18, heads: 16
+# DiT ≈ 180M + ESM2-3B ≈ 3B 总参数
+# 适合：4~8×A100
+# ============================================================
+
 _target_: model.torch.architecture.FoldingDiT
 
 hidden_size: 1024
@@ -30,13 +37,13 @@ pos_embedder:
 
 trunk:
   _target_: model.torch.blocks.HomogenTrunk
-  depth: 18
-  block: 
+  depth: 18          # 18 层 DiTBlock
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 1024
     mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    use_swiglu: True
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True
@@ -55,13 +62,13 @@ atom_n_queries_enc: 32
 atom_n_keys_enc: 128
 atom_encoder_transformer:
   _target_: model.torch.blocks.HomogenTrunk
-  depth: 2
-  block: 
+  depth: 2            # 原子编码器 2 层
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 256
     mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    use_swiglu: True
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True
@@ -81,12 +88,12 @@ atom_n_keys_dec: 128
 atom_decoder_transformer:
   _target_: model.torch.blocks.HomogenTrunk
   depth: 2
-  block: 
+  block:
     _target_: model.torch.blocks.DiTBlock
-    _partial_: True # because in the for loop we create a new module
+    _partial_: True
     hidden_size: 256
     mlp_ratio: 4.0
-    use_swiglu: True # SwiGLU FFN
+    use_swiglu: True
     self_attention_layer:
       _target_: model.torch.layers.EfficientSelfAttentionLayer
       _partial_: True

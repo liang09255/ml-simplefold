@@ -1,7 +1,14 @@
+# ============================================================
+# pdb.yaml — PDB-only 训练数据配置
+# ============================================================
+# 使用 RCSB PDB 实验解析的蛋白质结构
+# 经过过滤：分辨率 <= 5.0 Å，发布日期 <= 2020-05-01
+# ============================================================
+
 _target_: datasets.train_datamodule.SimpleFoldTrainingDataModule
 
 datasets:
-  - _target_: datasets.train_datamodule.DatasetConfig
+  - _target_: utils.datamodule_utils.DatasetConfig
     data_name: rcsb_protein
     tokenized_dir: /mnt/task_runtime/data/rcsb_protein_tokenized
     target_dir: /mnt/task_runtime/data/rcsb_processed_targets
@@ -22,6 +29,7 @@ filters:
       min_chains: 1
       max_chains: 300
 
+# ─── 分词器、特征提取器、对称性 ───
 tokenizer:
   _target_: boltz_data_pipeline.tokenize.boltz_protein.BoltzTokenizer
 
@@ -29,6 +37,8 @@ featurizer:
   _target_: boltz_data_pipeline.feature.featurizer.BoltzFeaturizer
 
 symmetries: /mnt/task_runtime/data/symmetry.pkl
+
+# ─── 训练参数 ───
 max_tokens: 256
 max_atoms: 2304
 pad_to_max_tokens: False
