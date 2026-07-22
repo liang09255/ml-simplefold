@@ -3,3 +3,6 @@ eval-model:
 
 train:
 	python src/simplefold/train.py experiment=debug_cpu
+
+board:
+	tensorboard --logdir artifacts/tensorboard --port 6006
