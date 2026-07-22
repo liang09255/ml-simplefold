@@ -317,10 +317,16 @@ class SimpleFold(pl.LightningModule):
             "loss/plddt",
             loss.item(),
             on_epoch=True,
-            logger=True,
+            logger=False,
             prog_bar=True,
             rank_zero_only=True,
+            sync_dist=True,
         )
+
+        if self.logger is not None and self.trainer.global_rank == 0:
+            self.logger.experiment.add_scalar(
+                "loss/plddt", loss.item(), self.current_epoch
+            )
 
         return loss
 
@@ -432,10 +438,16 @@ class SimpleFold(pl.LightningModule):
             "loss/mse",
             loss.item(),
             on_epoch=True,
-            logger=True,
+            logger=False,
             prog_bar=True,
             rank_zero_only=True,
+            sync_dist=True,
         )
+
+        if self.logger is not None and self.trainer.global_rank == 0:
+            self.logger.experiment.add_scalar(
+                "loss/mse", loss.item(), self.current_epoch
+            )
 
         if self.use_smooth_lddt_loss:
             # one-step Euler to get denoised coordinates
@@ -472,19 +484,31 @@ class SimpleFold(pl.LightningModule):
                 "loss/smooth_lddt",
                 smooth_lddt_loss.item(),
                 on_epoch=True,
-                logger=True,
+                logger=False,
                 prog_bar=True,
                 rank_zero_only=True,
+                sync_dist=True,
             )
+
+            if self.logger is not None and self.trainer.global_rank == 0:
+                self.logger.experiment.add_scalar(
+                    "loss/smooth_lddt", smooth_lddt_loss.item(), self.current_epoch
+                )
 
         self.log(
             "loss/loss",
             loss.item(),
             on_epoch=True,
-            logger=True,
+            logger=False,
             prog_bar=True,
             rank_zero_only=True,
+            sync_dist=True,
         )
+
+        if self.logger is not None and self.trainer.global_rank == 0:
+            self.logger.experiment.add_scalar(
+                "loss/loss", loss.item(), self.current_epoch
+            )
 
         self.log(
             "trainer/global_step",
@@ -688,10 +712,16 @@ class SimpleFold(pl.LightningModule):
             "trainer/lr",
             optimizer.param_groups[0]["lr"],
             on_epoch=True,
-            logger=True,
+            logger=False,
             prog_bar=True,
             rank_zero_only=True,
+            sync_dist=True,
         )
+
+        if self.logger is not None and self.trainer.global_rank == 0:
+            self.logger.experiment.add_scalar(
+                "trainer/lr", optimizer.param_groups[0]["lr"], self.current_epoch
+            )
 
     def on_before_optimizer_step(self, optimizer: Optimizer) -> None:
 
@@ -758,18 +788,20 @@ class SimpleFold(pl.LightningModule):
 
     def on_load_checkpoint(self, checkpoint) -> None:
 
-        if not isinstance(
-            self.trainer.strategy, lightning.pytorch.strategies.fsdp.FSDPStrategy
-        ):
-            self.training_gpus = checkpoint["hyper_parameters"]["training_gpus"]
-            self.fwd_flops = checkpoint["hyper_parameters"]["fwd_flops"]
-
-        if checkpoint["loops"] is not None:
-
-            self.trainer.fit_loop.load_state_dict(checkpoint["loops"]["fit_loop"])
-            self.trainer.validate_loop.load_state_dict(
-                checkpoint["loops"]["validate_loop"]
+        try:
+            is_fsdp = isinstance(
+                self.trainer.strategy, lightning.pytorch.strategies.fsdp.FSDPStrategy
             )
+        except Exception:
+            is_fsdp = False
+
+        if not is_fsdp:
+            try:
+                self.training_gpus = checkpoint["hyper_parameters"]["training_gpus"]
+                self.fwd_flops = checkpoint["hyper_parameters"]["fwd_flops"]
+            except KeyError:
+                pass
+
         return super().on_load_checkpoint(checkpoint)
 
     def configure_optimizers(self):

@@ -34,10 +34,10 @@ trainer:
   # ─── 训练步数 ───
   # 官方 Full-Scale 训练：max_steps: 300000
   # CPU 测试：建议 5~50 步验证管线
-  max_steps: 100
+  max_steps: 1000
 
   # 验证间隔（每 N 步做一次验证）
-  val_check_interval: 5
+  val_check_interval: 10
 
   # ─── 精度 ───
   # CPU: 32-true（单精度）
@@ -45,14 +45,14 @@ trainer:
   precision: 32-true
 
   # 日志间隔
-  log_every_n_steps: 1
+  log_every_n_steps: 10
 
   # 跳过验证集 sanity check（节省时间）
   num_sanity_val_steps: 0
 
 data:
   batch_size: 1             # 批次大小（CPU 上只能 1；GPU 上可调大）
-  num_workers: 0            # 数据加载线程（CPU 建议 0；GPU 建议 8~16）
+  num_workers: 1            # 数据加载线程（CPU 建议 0；GPU 建议 8~16）
 
 model:
   _target_: model.simplefold.SimpleFold
@@ -61,7 +61,7 @@ model:
   # 可选值: esm2_8M, esm2_35M, esm2_150M, esm2_650M, esm2_3B, esm2_15B
   # 越大提供的序列特征越丰富，但显存占用也越大
   # CPU 上只建议用 esm2_8M
-  esm_model: "esm2_8M"
+  esm_model: "esm2_35M"
 
   # EMA 指数移动平均衰减率 — 平滑模型权重，提高稳定性
   ema_decay: 0.999
@@ -85,3 +85,8 @@ model:
     scale: 16.0       # 坐标缩放因子（归一化坐标到 [-scale, scale]）
     ref_scale: 5.0    # 参考坐标缩放
     multiplicity: 1   # 每个样本的副本数（= 梯度累积效果，没有 GPU 隐存时用）
+
+
+callbacks:
+  model_checkpoint:
+    every_n_train_steps: 100    # ← 每 100 步保存一次
