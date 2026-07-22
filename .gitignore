@@ -2,3 +2,8 @@
 *.DS_Store
 *.egg-info
 artifacts/
+.idea/
+venv/
+data/
+outputs/
+*.log
